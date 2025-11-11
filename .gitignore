@@ -1,0 +1,19 @@
+# Expo
+.expo/
+dist/
+.idea/
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# node_modules
+node_modules/
+
+# cache
+.metro-cache/
+
+# secrets
+.env
