@@ -1,89 +1,81 @@
 // file: frontend/src/screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, FlatList, StyleSheet, SafeAreaView, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { getMenuSuggestions } from '../api/apiClient';
-import FoodCard from '../components/FoodCard';
+import { View, Text, StyleSheet, Dimensions, Button } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+import { getTodayLog, getWeeklyHistory } from '../api/apiClient';
+
+const screenWidth = Dimensions.get('window').width;
 
 const HomeScreen = ({ navigation }) => {
-  const [suggestions, setSuggestions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [dailyLog, setDailyLog] = useState({ total_calories: 0 });
+  const [historyData, setHistoryData] = useState({
+    labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+    datasets: [{ data: [0, 0, 0, 0, 0, 0, 0] }],
+  });
 
-  const fetchSuggestions = async () => {
-    setIsLoading(true);
-    setError(null);
+  const fetchData = async () => {
     try {
-      const userInfo = {
-        user_id: "test_user_123", // Thay bằng ID người dùng thật sau này
-        goal: 'healthy',
-        diet_type: 'any',
-        daily_calories: 2000,
+      const logRes = await getTodayLog();
+      setDailyLog(logRes.data);
+      
+      const historyRes = await getWeeklyHistory();
+      // Xử lý dữ liệu trả về từ API để phù hợp với biểu đồ
+      const formattedData = {
+        labels: historyRes.data.labels, // Ví dụ: ['Day 1', 'Day 2', ...]
+        datasets: [{ data: historyRes.data.calories }], // Ví dụ: [1800, 2000, ...]
       };
-      const response = await getMenuSuggestions(userInfo);
-      setSuggestions(response.data.suggestions);
-    } catch (e) {
-      setError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
-      console.error("Lỗi khi lấy gợi ý:", e);
-    } finally {
-      setIsLoading(false);
+      setHistoryData(formattedData);
+    } catch (error) {
+      console.error('Lỗi khi tải dữ liệu trang chủ:', error);
     }
   };
 
   useEffect(() => {
-    fetchSuggestions();
+    fetchData();
   }, []);
-
-  const renderContent = () => {
-    if (isLoading) {
-      return <ActivityIndicator size="large" color="#1e88e5" style={{ marginTop: 50 }} />;
-    }
-    if (error) {
-      return (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button title="Thử lại" onPress={fetchSuggestions} />
-        </View>
-      );
-    }
-    return (
-      <FlatList
-        data={suggestions}
-        renderItem={({ item }) => <FoodCard food={item} />}
-        keyExtractor={(item) => item.food_id.toString()}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      />
-    );
+  
+  // Giả sử có 1 nút để thêm món ăn thủ công
+  const handleAddCustomFood = async () => {
+    // const food = { name: 'Bánh mì', calories: 250, ... };
+    // await logMealToDay(food);
+    // fetchData(); // Tải lại dữ liệu sau khi thêm
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Gợi ý cho hôm nay</Text>
-        <TouchableOpacity onPress={fetchSuggestions} style={styles.refreshButton}>
-            <Text style={styles.refreshText}>Làm mới</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {renderContent()}
+ return (
+  <View style={styles.container}>
+    <Text style={styles.header}>Tổng Quan Hôm Nay</Text>
 
-      <View style={styles.navigationButtons}>
-         <Button title="Tới trang Hồ sơ" onPress={() => navigation.navigate('Profile')} />
-         <View style={{width: 20}}/>
-         <Button title="Hỏi NutriAI" onPress={() => navigation.navigate('Chat')} />
-      </View>
-    </SafeAreaView>
-  );
+    {/* Phần hiển thị tổng Calo trong ngày */}
+    <View style={styles.calorieCircle}>
+      <Text style={styles.calorieText}>{Math.round(dailyLog.total_calories)}</Text>
+      <Text>kcal</Text>
+    </View>
+    
+    <Text style={styles.header}>Xu Hướng Tiêu Thụ Calo (7 ngày qua)</Text>
+
+    {/* Phần hiển thị biểu đồ */}
+    <LineChart
+      data={historyData}
+      width={screenWidth - 20} // Lấy chiều rộng màn hình trừ đi một chút padding
+      height={220}
+      chartConfig={chartConfig} // Cấu hình màu sắc và style cho biểu đồ
+      bezier // Làm cho đường biểu đồ cong mượt mà
+    />
+
+    {/* Nút để người dùng có thể tải lại dữ liệu thủ công */}
+    <Button title="Cập nhật dữ liệu" onPress={fetchData} />
+  </View>
+);
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15 },
-    title: { fontSize: 24, fontWeight: 'bold' },
-    refreshButton: { backgroundColor: '#e0e0e0', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 },
-    refreshText: { color: '#333', fontWeight: '600' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    errorText: { marginBottom: 10, color: 'red' },
-    navigationButtons: { flexDirection: 'row', justifyContent: 'center', padding: 10, borderTopWidth: 1, borderTopColor: '#eee' }
-});
+const chartConfig = {
+  backgroundColor: '#e26a00',
+  backgroundGradientFrom: '#fb8c00',
+  backgroundGradientTo: '#ffa726',
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+  style: { borderRadius: 16 },
+};
 
+const styles = StyleSheet.create({ /* ... styles của bạn ... */ });
 export default HomeScreen;

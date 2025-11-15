@@ -1,77 +1,133 @@
 // file: frontend/src/screens/ChatScreen.js
-import React, { useState } from 'react';
-import { View, TextInput, Button, FlatList, Text, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button, FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { postChatMessage } from '../api/apiClient';
 
 const ChatScreen = () => {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+    const [messages, setMessages] = useState([]);
+    const [currentMessage, setCurrentMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [conversationId, setConversationId] = useState(null);
 
-  const handleSend = async () => {
-    if (input.trim().length === 0) return;
+    useEffect(() => {
+        setConversationId(uuidv4());
+    }, []);
 
-    const userMessage = { id: Date.now().toString(), text: input, sender: 'user' };
-    setMessages(prev => [userMessage, ...prev]);
-    setInput('');
-    setIsLoading(true);
+    const handleSendMessage = async () => {
+        if (currentMessage.trim().length === 0 || !conversationId) return;
+        const newUserMessage = { role: 'user', content: currentMessage.trim() };
+        const updatedMessages = [...messages, newUserMessage];
+        setMessages(updatedMessages);
+        setCurrentMessage('');
+        setIsLoading(true);
+        try {
+            const response = await postChatMessage(updatedMessages, conversationId);
+            const aiResponseMessage = { role: 'assistant', content: response.data.response };
+            setMessages(prevMessages => [...prevMessages, aiResponseMessage]);
+        } catch (error) {
+            console.error("Lỗi chat:", error.response?.data || error.message);
+            const errorMessage = { role: 'assistant', content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.' };
+            setMessages(prevMessages => [...prevMessages, errorMessage]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    try {
-        const response = await postChatMessage("test_user_123", input);
-        const aiMessage = { id: (Date.now() + 1).toString(), text: response.data.response, sender: 'ai' };
-        setMessages(prev => [aiMessage, ...prev]);
-    } catch (error) {
-        console.error("Lỗi chat:", error);
-        const errorMessage = { id: (Date.now() + 1).toString(), text: "Xin lỗi, có lỗi xảy ra.", sender: 'ai' };
-        setMessages(prev => [errorMessage, ...prev]);
-    } finally {
-        setIsLoading(false);
-    }
-  };
-  
-  const renderItem = ({ item }) => (
-    <View style={[styles.messageContainer, item.sender === 'user' ? styles.userMessage : styles.aiMessage]}>
-      <Text style={item.sender === 'user' ? styles.userText : styles.aiText}>{item.text}</Text>
-    </View>
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={90}
-      >
-        <FlatList
-          data={messages}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          inverted
-          contentContainerStyle={{ padding: 10 }}
-        />
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Hỏi NutriAI điều gì đó..."
-          />
-          <Button title="Gửi" onPress={handleSend} disabled={isLoading} />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+    return (
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.container}
+            keyboardVerticalOffset={90}
+        >
+            <Text style={styles.header}>Tư Vấn Cùng NutriAI</Text>
+            <FlatList
+                data={messages}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({ item }) => (
+                    <View style={[styles.messageBubble, item.role === 'user' ? styles.userMessage : styles.assistantMessage]}>
+                        <Text style={item.role === 'user' ? styles.userMessageText : styles.assistantMessageText}>
+                            {item.content}
+                        </Text>
+                    </View>
+                )}
+                contentContainerStyle={styles.messageList}
+            />
+            {isLoading && <ActivityIndicator size="small" color="#191970" style={styles.typingIndicator} />}
+            <View style={styles.inputContainer}>
+                <TextInput
+                    style={styles.input}
+                    value={currentMessage}
+                    onChangeText={setCurrentMessage}
+                    placeholder="Nhập câu hỏi của bạn..."
+                    editable={!isLoading}
+                />
+                <Button title="Gửi" onPress={handleSendMessage} disabled={isLoading} />
+            </View>
+        </KeyboardAvoidingView>
+    );
 };
 
+
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
-    inputContainer: { flexDirection: 'row', padding: 10, borderTopWidth: 1, borderTopColor: '#ddd', backgroundColor: '#fff' },
-    input: { flex: 1, height: 40, borderColor: '#ccc', borderWidth: 1, borderRadius: 20, paddingHorizontal: 15, marginRight: 10 },
-    messageContainer: { maxWidth: '80%', padding: 12, borderRadius: 18, marginBottom: 10 },
-    userMessage: { alignSelf: 'flex-end', backgroundColor: '#1e88e5' },
-    aiMessage: { alignSelf: 'flex-start', backgroundColor: '#e0e0e0' },
-    userText: { color: 'white' },
-    aiText: { color: 'black' },
+    container: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    header: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        padding: 20,
+        color: '#2c3e50',
+    },
+    messageList: {
+        paddingHorizontal: 10,
+    },
+    messageBubble: {
+        maxWidth: '80%',
+        padding: 12,
+        borderRadius: 15,
+        marginVertical: 5,
+    },
+    userMessage: {
+        alignSelf: 'flex-end',
+        backgroundColor: '#3498db',
+    },
+    assistantMessage: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#ecf0f1',
+    },
+    userMessageText: {
+        color: 'white',
+        fontSize: 16,
+    },
+    assistantMessageText: {
+        color: 'black',
+        fontSize: 16,
+    },
+    typingIndicator: {
+        alignSelf: 'flex-start',
+        marginLeft: 15,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#ccc',
+        backgroundColor: '#fff',
+    },
+    input: {
+        flex: 1,
+        height: 40,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 20,
+        paddingHorizontal: 15,
+        marginRight: 10,
+    },
 });
 
 export default ChatScreen;

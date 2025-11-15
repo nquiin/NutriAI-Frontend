@@ -1,16 +1,40 @@
 // file: frontend/src/screens/LoginScreen.js
-import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, SafeAreaView } from 'react-native';
+
+import React, { useState, useContext } from 'react';
+import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+// BƯỚC 1: Import AuthContext để sử dụng hàm login
+import { AuthContext } from '../context/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
-    // Trong dự án thật, bạn sẽ gọi API đăng nhập ở đây
-    // Tạm thời, chúng ta sẽ chuyển thẳng đến màn hình Home
-    // Dùng 'replace' để người dùng không thể quay lại màn hình Login
-    navigation.replace('Home');
+  // BƯỚC 2: Lấy hàm `login` từ context
+  const { login } = useContext(AuthContext);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ email và mật khẩu.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // BƯỚC 3: Gọi hàm login từ context
+      // Hàm này sẽ xử lý việc gọi API, lưu token và cập nhật trạng thái
+      await login(email, password);
+      
+      // KHÔNG CẦN navigation.replace('Home') ở đây nữa.
+      // AppNavigator sẽ tự động chuyển màn hình khi userToken thay đổi.
+
+    } catch (error) {
+      Alert.alert('Đăng nhập thất bại', 'Email hoặc mật khẩu không đúng. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,7 +56,21 @@ const LoginScreen = ({ navigation }) => {
         onChangeText={setPassword}
         secureTextEntry
       />
-      <Button title="Đăng nhập" onPress={handleLogin} />
+
+      {isLoading ? (
+        <ActivityIndicator size="large" color="#191970" />
+      ) : (
+        <Button title="Đăng nhập" color="#191970" onPress={handleLogin} />
+      )}
+      
+      {/* BƯỚC 4: Thêm nút điều hướng đến trang Đăng ký */}
+      <View style={{ marginTop: 15 }}>
+        <Button 
+          title="Chưa có tài khoản? Đăng ký" 
+          onPress={() => navigation.navigate('Register')} // 'Register' là tên màn hình trong AuthNavigator
+          color="#888"
+        />
+      </View>
     </SafeAreaView>
   );
 };
@@ -47,7 +85,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     fontWeight: 'bold',
-    color: '#1e88e5',
+    color: '#191970',
     textAlign: 'center',
   },
   subtitle: {
